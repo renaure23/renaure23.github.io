@@ -1,80 +1,43 @@
  body {
-        font-family:monospace;
-        background-color:rgb(255, 136, 0);
-    }
-       #cookie{
-           text-align:center;
-            background-color:rgb(115, 63, 0);
-            height:100px;
-            width:100px;
-            border-radius:100%;
-        }
-        #chip {
-            position:absolute;
-            top:20px;
-            margin:50px;
-            padding:0px;
-            background-color:rgb(61, 61, 61);
-            height:8px;
-            width:8px;
-            border-radius:100%;
-        }
-        #chip2 {
-            position:absolute;
-            top:40px;
-            left:-16px;
-            margin:50px;
-            padding:0px;
-            background-color:rgb(61, 61, 61);
-            height:8px;
-            width:8px;
-            border-radius:100%;
-        }
-         #chip3 {
-            position:absolute;
-            top:2px;
-            left:-22px;
-            margin:50px;
-            padding:0px;
-            background-color:rgb(61, 61, 61);
-            height:8px;
-            width:8px;
-            border-radius:100%;
-        }
-        #chip4 {
-            position:absolute;
-            top:-17px;
-            left:23px;
-            margin:50px;
-            padding:0px;
-            background-color:rgb(61, 61, 61);
-            height:8px;
-            width:8px;
-            border-radius:100%;border-radius:100%;
-        }
-        
-        p {
-            
-            color:rgb(255, 255, 255);
-            z-index:1;
-            display:inline-block;
-            margin:5px;
-        }
-        
-        #space {
-            text-align:center;
-            border:5px solid;
-            border-radius:10px;
-            position:absolute;
-            left:122px;
-            top:20px;
-            background-color:grey;
-            width:389px;
-            height:78px;
-        }
-        table {
-            border:1px solid;
-        }
-        td {
-            border:1px solid;
-        }
+    margin: 60px auto;
+    width: 70%;
+}
+nav ul, footer ul {
+    font-family:'Helvetica', 'Arial', 'Sans-Serif';
+    padding: 0px;
+    list-style: none;
+    font-weight: bold;
+}
+nav ul li, footer ul li {
+    display: inline;
+    margin-right: 20px;
+}
+a {
+    text-decoration: none;
+    color: #999;
+}
+a:hover {
+    text-decoration: underline;
+}
+h1 {
+    font-size: 3em;
+    font-family:'Helvetica', 'Arial', 'Sans-Serif';
+}
+p {
+    font-size: 1.5em;
+    line-height: 1.4em;
+    color: #333;
+}
+footer {
+    border-top: 1px solid #d5d5d5;
+    font-size: .8em;
+}
+
+ul.posts { 
+    margin: 20px auto 40px; 
+    font-size: 1.5em;
+}
+
+ul.posts li {
+    list-style: none;
+}
