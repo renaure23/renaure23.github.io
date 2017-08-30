@@ -181,3 +181,179 @@ function highlight_line(line_num) {
     ctx.strokeRect(reel_area_left + ss, reel_area_top + ss + ss, ss-1, ss-1); // top middle
   }
   if (line_num == 3 || line_num == 4) {
+    ctx.strokeRect(reel_area_left + ss + ss, reel_area_top + ss + ss, ss-1, ss-1); // top right
+  }
+
+}
+
+// render all art needed in the current frame
+function render() {
+
+  if (game_state == STATE_SPINUP || game_state == STATE_SPINDOWN) {
+    render_reel();
+  }
+
+}
+
+
+//---- Logic Functions ---------------------------------------------
+
+function set_stops() {
+  for (var i=0; i<reel_count; i++) {
+
+    start_slowing[i] = false;
+
+    stop_index = Math.floor(Math.random() * reel_positions);
+    stopping_position[i] = stop_index * symbol_size;
+
+    stopping_position[i] += stopping_distance;
+    if (stopping_position[i] >= reel_pixel_length) stopping_position[i] -= reel_pixel_length;
+
+    // convenient here to remember the winning positions
+    for (var j=0; j<row_count; j++) {
+      result[i][j] = stop_index + j;
+      if (result[i][j] >= reel_positions) result[i][j] -= reel_positions;
+
+      // translate reel positions into symbol
+      result[i][j] = reels[i][result[i][j]];
+    }
+  }
+}
+
+function move_reel(i) {
+  reel_position[i] -= reel_speed[i];
+
+  // wrap
+  if (reel_position[i] < 0) {
+    reel_position[i] += reel_pixel_length;
+  }
+}
+
+// handle reels accelerating to full speed
+function logic_spinup() {
+
+  for (var i=0; i<reel_count; i++) {
+
+    // move reel at current speed
+    move_reel(i);
+
+    // accelerate speed
+    reel_speed[i] += spinup_acceleration;
+
+  }
+
+  // if reels at max speed, begin spindown
+  if (reel_speed[0] == max_reel_speed) {
+
+    // calculate the final results now, so that spindown is ready
+    set_stops();
+
+    game_state = STATE_SPINDOWN;
+  }
+}
+
+// handle reel movement as the reels are coming to rest
+function logic_spindown() {
+
+  // if reels finished moving, begin rewards
+  if (reel_speed[reel_count-1] == 0) {
+
+    calc_reward();
+    game_state = STATE_REWARD;
+  }
+
+  for (var i=0; i<reel_count; i++) {
+
+    // move reel at current speed
+    move_reel(i);
+
+    // start slowing this reel?
+    if (start_slowing[i] == false) {
+
+      // if the first reel, or the previous reel is already slowing
+      var check_position = false;
+      if (i == 0) check_position = true;
+      else if (start_slowing[i-1]) check_position = true;
+
+      if (check_position) {
+      
+        if (reel_position[i] == stopping_position[i]) {
+          start_slowing[i] = true;          
+        }
+      }
+    }
+    else {
+      if (reel_speed[i] > 0) {
+        reel_speed[i] -= spindown_acceleration;
+
+        if (reel_speed[i] == 0) {
+          try {
+            snd_reel_stop[i].currentTime = 0;
+            snd_reel_stop[i].play();
+          } catch(err) {};
+        }
+
+      }
+    }
+  }
+
+}
+
+// count up the reward credits, play sound effects, etc.
+function logic_reward() {
+
+  if (payout == 0) {
+    game_state = STATE_REST;
+    return;
+  }
+
+  // don't tick up rewards each frame, too fast
+  if (reward_delay_counter > 0) {
+    reward_delay_counter--;
+    return;
+  }
+
+  payout--;
+  credits++;
+  cred_p.innerHTML = "Karma (" + credits + ")";
+  
+  if (payout < reward_grand_threshhold) {
+    reward_delay_counter = reward_delay;
+  }
+  else { // speed up big rewards
+    reward_delay_counter += reward_delay_grand;
+  }
+
+}
+
+// update all logic in the current frame
+function logic() {
+
+  // REST to SPINUP happens on an input event
+
+  if (game_state == STATE_SPINUP) {
+    logic_spinup();
+  }
+  else if (game_state == STATE_SPINDOWN) {
+    logic_spindown();
+  }
+  else if (game_state == STATE_REWARD) {
+    logic_reward();
+  }
+  
+}
+
+// given an input line of symbols, determine the payout
+function calc_line(s1, s2, s3) {
+
+  // perfect match
+  if (s1 == s2 && s2 == s3) {
+    return match_payout[s1];
+  }
+
+  // special case #1: triple ups
+  if ((s1 == 1 || s1 == 2 || s1 == 3) &&
+      (s2 == 1 || s2 == 2 || s2 == 3) &&
+      (s3 == 1 || s3 == 2 || s3 == 3)) {
+    return payout_ups;
+  }
