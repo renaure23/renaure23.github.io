@@ -357,3 +357,170 @@ function calc_line(s1, s2, s3) {
       (s3 == 1 || s3 == 2 || s3 == 3)) {
     return payout_ups;
   }
+if ((s1 == 5 || s1 == 6 || s1 == 7) &&
+      (s2 == 5 || s2 == 6 || s2 == 7) &&
+      (s3 == 5 || s3 == 6 || s3 == 7)) {
+    return payout_downs;
+  }
+
+  // special case #3: bacon goes with everything
+  if (s1 == 9) {
+    if (s2 == s3) return match_payout[s2];
+
+    // wildcard trip ups
+    if ((s2 == 1 || s2 == 2 || s2 == 3) &&
+        (s3 == 1 || s3 == 2 || s3 == 3)) return payout_ups;
+
+    // wildcard trip downs
+    if ((s2 == 5 || s2 == 6 || s2 == 7) &&
+        (s3 == 5 || s3 == 6 || s3 == 7)) return payout_downs;
+  
+  }
+  if (s2 == 9) {
+    if (s1 == s3) return match_payout[s1];
+
+    // wildcard trip ups
+    if ((s1 == 1 || s1 == 2 || s1 == 3) &&
+        (s3 == 1 || s3 == 2 || s3 == 3)) return payout_ups;
+
+    // wildcard trip downs
+    if ((s1 == 5 || s1 == 6 || s1 == 7) &&
+        (s3 == 5 || s3 == 6 || s3 == 7)) return payout_downs;
+
+  }
+  if (s3 == 9) {
+    if (s1 == s2) return match_payout[s1];
+
+    // wildcard trip ups
+    if ((s1 == 1 || s1 == 2 || s1 == 3) &&
+        (s2 == 1 || s2 == 2 || s2 == 3)) return payout_ups;
+
+    // wildcard trip downs
+    if ((s1 == 5 || s1 == 6 || s1 == 7) &&
+        (s2 == 5 || s2 == 6 || s2 == 7)) return payout_downs;
+  }
+
+  // check double-bacon
+  if (s2 == 9 && s3 == 9) return match_payout[s1];
+  if (s1 == 9 && s3 == 9) return match_payout[s2];
+  if (s1 == 9 && s2 == 9) return match_payout[s3];
+
+  // no reward
+  return 0;
+}
+
+// calculate the reward
+function calc_reward() {
+  payout = 0;
+  
+  var partial_payout;
+
+  // Line 1
+  partial_payout = calc_line(result[0][1], result[1][1], result[2][1]);
+  if (partial_payout > 0) {
+    log_p.innerHTML += "Line 1 pays " + partial_payout + "<br />\n";
+    payout += partial_payout;
+    highlight_line(1);
+  }
+
+  if (playing_lines > 1) {
+
+    // Line 2
+    partial_payout = calc_line(result[0][0], result[1][0], result[2][0]);
+    if (partial_payout > 0) {
+      log_p.innerHTML += "Line 2 pays " + partial_payout + "<br />\n";
+      payout += partial_payout;
+      highlight_line(2);
+    }
+
+    // Line 3
+    partial_payout = calc_line(result[0][2], result[1][2], result[2][2]);
+    if (partial_payout > 0) {
+      log_p.innerHTML += "Line 3 pays " + partial_payout + "<br />\n";
+      payout += partial_payout;
+      highlight_line(3);
+    }
+  }
+
+
+  if (playing_lines > 3) {
+
+    // Line 4
+    partial_payout = calc_line(result[0][0], result[1][1], result[2][2]);
+    if (partial_payout > 0) {
+      log_p.innerHTML += "Line 4 pays " + partial_payout + "<br />\n";
+      payout += partial_payout;
+      highlight_line(4);
+    }
+
+    // Line 5
+    partial_payout = calc_line(result[0][2], result[1][1], result[2][0]);
+    if (partial_payout > 0) {
+      log_p.innerHTML += "Line 5 pays " + partial_payout + "<br />\n";
+      payout += partial_payout;
+      highlight_line(5);
+    }
+  }
+
+  
+  if (payout > 0) {
+    try {
+      snd_win.currentTime = 0;
+      snd_win.play();
+    }
+    catch(err) {};
+  }
+
+}
+
+//---- Input Functions ---------------------------------------------
+
+function handleKey(evt) {
+  if (evt.keyCode == 32) { // spacebar
+    if (game_state != STATE_REST) return;
+
+    if (credits >= 5) spin(5);
+    else if (credits >= 3) spin(3);
+    else if (credits >= 1) spin(1);
+
+  }
+}
+
+function spin(line_choice) {
+  
+  if (game_state != STATE_REST) return;
+  if (credits < line_choice) return;
+
+  credits -= line_choice;
+  playing_lines = line_choice;
+
+  cred_p.innerHTML = "Karma (" + credits + ")";
+  log_p.innerHTML = "";
+
+  game_state = STATE_SPINUP;
+
+}
+
+//---- Init Functions -----------------------------------------------
+
+function init() {
+  can = document.getElementById("slots"); 
+  ctx = can.getContext("2d");
+  log_p = document.getElementById("log");
+  cred_p = document.getElementById("credits");
+
+  cred_p.innerHTML = "Karma (" + credits + ")"
+
+  window.addEventListener('keydown', handleKey, true);
+
+  symbols.onload = function() {
+    symbols_loaded = true;
+    if (symbols_loaded && reels_bg_loaded) render_reel();
+  };
+
+  reels_bg.onload = function() {
+    reels_bg_loaded = true;
+    if (symbols_loaded && reels_bg_loaded) render_reel();
+  };
+
+}
