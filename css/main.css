@@ -1,43 +1,55 @@
  body {
-    margin: 60px auto;
-    width: 70%;
-}
-nav ul, footer ul {
-    font-family:'Helvetica', 'Arial', 'Sans-Serif';
-    padding: 0px;
-    list-style: none;
-    font-weight: bold;
-}
-nav ul li, footer ul li {
-    display: inline;
-    margin-right: 20px;
-}
-a {
-    text-decoration: none;
-    color: #999;
-}
-a:hover {
-    text-decoration: underline;
-}
-h1 {
-    font-size: 3em;
-    font-family:'Helvetica', 'Arial', 'Sans-Serif';
-}
-p {
-    font-size: 1.5em;
-    line-height: 1.4em;
-    color: #333;
-}
-footer {
-    border-top: 1px solid #d5d5d5;
-    font-size: .8em;
+  margin: 0;
+  padding: 0;
+  background-color: #ffffff;
+  background-image: url("images/background.png");
+  background-position: 20px 0px;
+  background-repeat: no-repeat;
 }
 
-ul.posts { 
-    margin: 20px auto 40px; 
-    font-size: 1.5em;
+#wrap {
+  width: 300px;
+  height: 240px;
+  overflow: hidden;
 }
 
-ul.posts li {
-    list-style: none;
+#game {
+  width: 200px;
+  text-align: center;
+}
+
+
+button {
+  font-size: 7pt;
+}
+
+#info {
+  position: absolute;
+  top: 20px;
+  left: 200px;
+  width: 100px;
+  text-align: left;
+  font-size: 9pt;
+  font-family: arial, helvetica, sans-serif;
+}
+
+#credits {
+  font-size: 10pt;
+}
+
+#log {
+  color: #666666;
+}
+
+#attribution {
+  text-align: right;
+  width: 280px;
+  font-size: 7pt;
+  color: #666666;
+  font-family: arial, helvetica, sans-serif;
+  margin-top: 20px;
+}
+
+#attribution a {
+  color: #6666ff;
 }
