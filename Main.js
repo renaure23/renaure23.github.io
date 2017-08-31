@@ -1,526 +1,352 @@
 
-var FPS = 60;
-setInterval(function() {
-  logic();
-  render();
-}, 1000/FPS);
+var IMAGE_HEIGHT = 64;
+var IMAGE_TOP_MARGIN = 5;
+var IMAGE_BOTTOM_MARGIN = 5;
+var SLOT_SEPARATOR_HEIGHT = 2
+var SLOT_HEIGHT = IMAGE_HEIGHT + IMAGE_TOP_MARGIN + IMAGE_BOTTOM_MARGIN + SLOT_SEPARATOR_HEIGHT; // how many pixels one slot image takes
+var RUNTIME = 3000; // how long all slots spin before starting countdown
+var SPINTIME = 1000; // how long each slot spins at minimum
+var ITEM_COUNT = 6 // item count in slots
+var SLOT_SPEED = 15; // how many pixels per second slots roll
+var DRAW_OFFSET = 45 // how much draw offset in slot display from top
 
-// html elements
-var can;     // canvas
-var ctx;     // context
-var log_p;   // log paragraph
-var cred_p;  // credits paragraph
+var BLURB_TBL = [
+    'No win!',
+    'Good!',
+    'Excellent!',
+    'JACKPOT!'
+];
 
-var symbols_loaded = false;
-var reels_bg_loaded = false;
+function shuffleArray( array ) {
 
-// art
-var symbols = new Image();
-var reels_bg = new Image();
-var snd_reel_stop = new Array();
-var snd_win;
-
-symbols.src = "images/reddit_icons_small.png";
-reels_bg.src = "images/reels_bg.png";
-
-snd_win = new Audio("sounds/win.wav");
-snd_reel_stop[0] = new Audio("sounds/reel_stop.wav");
-snd_reel_stop[1] = new Audio("sounds/reel_stop.wav");
-snd_reel_stop[2] = new Audio("sounds/reel_stop.wav");
-
-// enums
-var STATE_REST = 0;
-var STATE_SPINUP = 1;
-var STATE_SPINDOWN = 2;
-var STATE_REWARD = 3;
-
-// config
-var reel_count = 3;
-var reel_positions = 32;
-var symbol_size = 32;
-var symbol_count = 11;
-var reel_pixel_length = reel_positions * symbol_size;
-var row_count = 3;
-var stopping_distance = 528;
-var max_reel_speed = 32;
-var spinup_acceleration = 2;
-var spindown_acceleration = 1;
-var starting_credits = 100;
-var reward_delay = 3; // how many frames between each credit tick
-var reward_delay_grand = 1; // delay for grand-prize winning
-var reward_grand_threshhold = 25; // count faster if the reward is over this size
-
-var match_payout = new Array(symbol_count);
-match_payout[7] = 4; // 3Down
-match_payout[6] = 6; // 2Down
-match_payout[5] = 8; // 1Down
-match_payout[1] = 10; // 1Up
-match_payout[2] = 15; // 2Up
-match_payout[3] = 20; // 3Up
-match_payout[4] = 25; // OrangeRed
-match_payout[0] = 50; // AlienHead
-match_payout[9] = 75; // Bacon
-match_payout[10] = 100; // Narwhal
-match_payout[8] = 250; // CakeDay
-
-var payout_ups = 6; // Any 3 Ups
-var payout_downs = 2; // Any 3 Downs
-
-var reel_area_left = 32;
-var reel_area_top = 32;
-var reel_area_width = 96;
-var reel_area_height = 96;
-
-// set up reels
-var reels = new Array(reel_count);
-reels[0] = new Array(2,1,7,1,2,7,6,7,3,10,1,6,1,7,3,4,3,2,4,5,0,6,10,5,6,5,8,3,0,9,5,4);
-reels[1] = new Array(6,0,10,3,6,7,9,2,5,2,3,1,5,2,1,10,4,5,8,4,7,6,0,1,7,6,3,1,5,9,7,4);
-reels[2] = new Array(1,4,2,7,5,6,4,10,7,5,2,0,6,4,10,1,7,6,3,0,5,7,2,3,9,3,5,6,1,8,1,3);
-
-var reel_position = new Array(reel_count);
-for (var i=0; i<reel_count; i++) {
-  reel_position[i] = Math.floor(Math.random() * reel_positions) * symbol_size;
-}
-
-var stopping_position = new Array(reel_count);
-var start_slowing = new Array(reel_count);
-
-// reel spin speed in pixels per frame
-var reel_speed = new Array(reel_count);
-for (var i=0; i<reel_count; i++) {
-  reel_speed[i] = 0;
-}
-
-var result = new Array(reel_count);
-for (var i=0; i<reel_count; i++) {
-  result[i] = new Array(row_count);
-}
-
-var game_state = STATE_REST;
-var credits = starting_credits;
-var payout = 0;
-var reward_delay_counter = 0;
-var playing_lines;
-
-//---- Render Functions ---------------------------------------------
-
-function draw_symbol(symbol_index, x, y) {
-  var symbol_pixel = symbol_index * symbol_size;
-  ctx.drawImage(symbols, 0,symbol_pixel,symbol_size,symbol_size, x+reel_area_left,y+reel_area_top,symbol_size,symbol_size);
-}
-
-function render_reel() {
-
-  // clear reel
-  ctx.drawImage(reels_bg, reel_area_left, reel_area_top);
-
-  // set clipping area
-  ctx.beginPath();
-  ctx.rect(reel_area_left, reel_area_top, reel_area_width, reel_area_height);
-  ctx.clip();
-
-  var reel_index;
-  var symbol_offset;
-  var symbol_index;
-  var x;
-  var y;
-
-  for (var i=0; i<reel_count; i++) {
-    for (var j=0; j<row_count +1; j++) {
-
-      reel_index = Math.floor(reel_position[i] / symbol_size) + j;
-      symbol_offset = reel_position[i] % symbol_size;
- 
-      // reel wrap
-      if (reel_index >= reel_positions) reel_index -= reel_positions;
-
-      // symbol lookup
-      symbol_index = reels[i][reel_index];
-
-      x = i * symbol_size;
-      y = j * symbol_size - symbol_offset;
-
-      draw_symbol(symbol_index, x, y);
-
+    for (i = array.length - 1; i > 0; i--) {
+	var j = parseInt(Math.random() * i)
+	var tmp = array[i];
+	array[i] = array[j]
+	array[j] = tmp;
     }
-  }
 }
 
-function highlight_line(line_num) {
+// Images must be preloaded before they are used to draw into canvas
+function preloadImages( images, callback ) {
 
-  ctx.strokeStyle = "orange";
-  var ss = symbol_size;
+    function _preload( asset ) {
+	asset.img = new Image();
+	asset.img.src = 'img/' + asset.id+'.png';
 
-  // top row
-  if (line_num == 2 || line_num == 4) {
-    ctx.strokeRect(reel_area_left, reel_area_top, symbol_size-1, symbol_size-1); // top left
-  }
-  if (line_num == 2) {
-    ctx.strokeRect(reel_area_left + ss, reel_area_top, ss-1, ss-1); // top middle
-  }
-  if (line_num == 2 || line_num == 5) {
-    ctx.strokeRect(reel_area_left + ss + ss, reel_area_top, ss-1, ss-1); // top right
-  }
+	asset.img.addEventListener("load", function() {
+	    _check();
+	}, false);
 
-  // middle row
-  if (line_num == 1) {
-    ctx.strokeRect(reel_area_left, reel_area_top + ss, ss-1, ss-1); // top left
-  }
-  if (line_num == 1 || line_num == 4 || line_num == 5) {
-    ctx.strokeRect(reel_area_left + ss, reel_area_top + ss, ss-1, ss-1); // top middle
-  }
-  if (line_num == 1) {
-    ctx.strokeRect(reel_area_left + ss + ss, reel_area_top + ss, ss-1, ss-1); // top right
-  }
-
-  // bottom row
-  if (line_num == 3 || line_num == 5) {
-    ctx.strokeRect(reel_area_left, reel_area_top + ss + ss, ss-1, ss-1); // top left
-  }
-  if (line_num == 3) {
-    ctx.strokeRect(reel_area_left + ss, reel_area_top + ss + ss, ss-1, ss-1); // top middle
-  }
-  if (line_num == 3 || line_num == 4) {
-    ctx.strokeRect(reel_area_left + ss + ss, reel_area_top + ss + ss, ss-1, ss-1); // top right
-  }
-
-}
-
-// render all art needed in the current frame
-function render() {
-
-  if (game_state == STATE_SPINUP || game_state == STATE_SPINDOWN) {
-    render_reel();
-  }
-
-}
-
-
-//---- Logic Functions ---------------------------------------------
-
-function set_stops() {
-  for (var i=0; i<reel_count; i++) {
-
-    start_slowing[i] = false;
-
-    stop_index = Math.floor(Math.random() * reel_positions);
-    stopping_position[i] = stop_index * symbol_size;
-
-    stopping_position[i] += stopping_distance;
-    if (stopping_position[i] >= reel_pixel_length) stopping_position[i] -= reel_pixel_length;
-
-    // convenient here to remember the winning positions
-    for (var j=0; j<row_count; j++) {
-      result[i][j] = stop_index + j;
-      if (result[i][j] >= reel_positions) result[i][j] -= reel_positions;
-
-      // translate reel positions into symbol
-      result[i][j] = reels[i][result[i][j]];
-    }
-  }
-}
-
-function move_reel(i) {
-  reel_position[i] -= reel_speed[i];
-
-  // wrap
-  if (reel_position[i] < 0) {
-    reel_position[i] += reel_pixel_length;
-  }
-}
-
-// handle reels accelerating to full speed
-function logic_spinup() {
-
-  for (var i=0; i<reel_count; i++) {
-
-    // move reel at current speed
-    move_reel(i);
-
-    // accelerate speed
-    reel_speed[i] += spinup_acceleration;
-
-  }
-
-  // if reels at max speed, begin spindown
-  if (reel_speed[0] == max_reel_speed) {
-
-    // calculate the final results now, so that spindown is ready
-    set_stops();
-
-    game_state = STATE_SPINDOWN;
-  }
-}
-
-// handle reel movement as the reels are coming to rest
-function logic_spindown() {
-
-  // if reels finished moving, begin rewards
-  if (reel_speed[reel_count-1] == 0) {
-
-    calc_reward();
-    game_state = STATE_REWARD;
-  }
-
-  for (var i=0; i<reel_count; i++) {
-
-    // move reel at current speed
-    move_reel(i);
-
-    // start slowing this reel?
-    if (start_slowing[i] == false) {
-
-      // if the first reel, or the previous reel is already slowing
-      var check_position = false;
-      if (i == 0) check_position = true;
-      else if (start_slowing[i-1]) check_position = true;
-
-      if (check_position) {
-      
-        if (reel_position[i] == stopping_position[i]) {
-          start_slowing[i] = true;          
-        }
-      }
-    }
-    else {
-      if (reel_speed[i] > 0) {
-        reel_speed[i] -= spindown_acceleration;
-
-        if (reel_speed[i] == 0) {
-          try {
-            snd_reel_stop[i].currentTime = 0;
-            snd_reel_stop[i].play();
-          } catch(err) {};
-        }
-
-      }
-    }
-  }
-
-}
-
-// count up the reward credits, play sound effects, etc.
-function logic_reward() {
-
-  if (payout == 0) {
-    game_state = STATE_REST;
-    return;
-  }
-
-  // don't tick up rewards each frame, too fast
-  if (reward_delay_counter > 0) {
-    reward_delay_counter--;
-    return;
-  }
-
-  payout--;
-  credits++;
-  cred_p.innerHTML = "Karma (" + credits + ")";
-  
-  if (payout < reward_grand_threshhold) {
-    reward_delay_counter = reward_delay;
-  }
-  else { // speed up big rewards
-    reward_delay_counter += reward_delay_grand;
-  }
-
-}
-
-// update all logic in the current frame
-function logic() {
-
-  // REST to SPINUP happens on an input event
-
-  if (game_state == STATE_SPINUP) {
-    logic_spinup();
-  }
-  else if (game_state == STATE_SPINDOWN) {
-    logic_spindown();
-  }
-  else if (game_state == STATE_REWARD) {
-    logic_reward();
-  }
-  
-}
-
-// given an input line of symbols, determine the payout
-function calc_line(s1, s2, s3) {
-
-  // perfect match
-  if (s1 == s2 && s2 == s3) {
-    return match_payout[s1];
-  }
-
-  // special case #1: triple ups
-  if ((s1 == 1 || s1 == 2 || s1 == 3) &&
-      (s2 == 1 || s2 == 2 || s2 == 3) &&
-      (s3 == 1 || s3 == 2 || s3 == 3)) {
-    return payout_ups;
-  }
-if ((s1 == 5 || s1 == 6 || s1 == 7) &&
-      (s2 == 5 || s2 == 6 || s2 == 7) &&
-      (s3 == 5 || s3 == 6 || s3 == 7)) {
-    return payout_downs;
-  }
-
-  // special case #3: bacon goes with everything
-  if (s1 == 9) {
-    if (s2 == s3) return match_payout[s2];
-
-    // wildcard trip ups
-    if ((s2 == 1 || s2 == 2 || s2 == 3) &&
-        (s3 == 1 || s3 == 2 || s3 == 3)) return payout_ups;
-
-    // wildcard trip downs
-    if ((s2 == 5 || s2 == 6 || s2 == 7) &&
-        (s3 == 5 || s3 == 6 || s3 == 7)) return payout_downs;
-  
-  }
-  if (s2 == 9) {
-    if (s1 == s3) return match_payout[s1];
-
-    // wildcard trip ups
-    if ((s1 == 1 || s1 == 2 || s1 == 3) &&
-        (s3 == 1 || s3 == 2 || s3 == 3)) return payout_ups;
-
-    // wildcard trip downs
-    if ((s1 == 5 || s1 == 6 || s1 == 7) &&
-        (s3 == 5 || s3 == 6 || s3 == 7)) return payout_downs;
-
-  }
-  if (s3 == 9) {
-    if (s1 == s2) return match_payout[s1];
-
-    // wildcard trip ups
-    if ((s1 == 1 || s1 == 2 || s1 == 3) &&
-        (s2 == 1 || s2 == 2 || s2 == 3)) return payout_ups;
-
-    // wildcard trip downs
-    if ((s1 == 5 || s1 == 6 || s1 == 7) &&
-        (s2 == 5 || s2 == 6 || s2 == 7)) return payout_downs;
-  }
-
-  // check double-bacon
-  if (s2 == 9 && s3 == 9) return match_payout[s1];
-  if (s1 == 9 && s3 == 9) return match_payout[s2];
-  if (s1 == 9 && s2 == 9) return match_payout[s3];
-
-  // no reward
-  return 0;
-}
-
-// calculate the reward
-function calc_reward() {
-  payout = 0;
-  
-  var partial_payout;
-
-  // Line 1
-  partial_payout = calc_line(result[0][1], result[1][1], result[2][1]);
-  if (partial_payout > 0) {
-    log_p.innerHTML += "Line 1 pays " + partial_payout + "<br />\n";
-    payout += partial_payout;
-    highlight_line(1);
-  }
-
-  if (playing_lines > 1) {
-
-    // Line 2
-    partial_payout = calc_line(result[0][0], result[1][0], result[2][0]);
-    if (partial_payout > 0) {
-      log_p.innerHTML += "Line 2 pays " + partial_payout + "<br />\n";
-      payout += partial_payout;
-      highlight_line(2);
+	asset.img.addEventListener("error", function(err) {
+	    _check(err, asset.id);
+	}, false);
     }
 
-    // Line 3
-    partial_payout = calc_line(result[0][2], result[1][2], result[2][2]);
-    if (partial_payout > 0) {
-      log_p.innerHTML += "Line 3 pays " + partial_payout + "<br />\n";
-      payout += partial_payout;
-      highlight_line(3);
-    }
-  }
-
-
-  if (playing_lines > 3) {
-
-    // Line 4
-    partial_payout = calc_line(result[0][0], result[1][1], result[2][2]);
-    if (partial_payout > 0) {
-      log_p.innerHTML += "Line 4 pays " + partial_payout + "<br />\n";
-      payout += partial_payout;
-      highlight_line(4);
+    var loadc = 0;
+    function _check( err, id ) {
+	if ( err ) {
+	    alert('Failed to load ' + id );
+	}
+	loadc++;
+	if ( images.length == loadc ) 
+	    return callback()
     }
 
-    // Line 5
-    partial_payout = calc_line(result[0][2], result[1][1], result[2][0]);
-    if (partial_payout > 0) {
-      log_p.innerHTML += "Line 5 pays " + partial_payout + "<br />\n";
-      payout += partial_payout;
-      highlight_line(5);
-    }
-  }
-
-  
-  if (payout > 0) {
-    try {
-      snd_win.currentTime = 0;
-      snd_win.play();
-    }
-    catch(err) {};
-  }
-
+    images.forEach(function(asset) {
+	_preload( asset );
+    });
 }
 
-//---- Input Functions ---------------------------------------------
-
-function handleKey(evt) {
-  if (evt.keyCode == 32) { // spacebar
-    if (game_state != STATE_REST) return;
-
-    if (credits >= 5) spin(5);
-    else if (credits >= 3) spin(3);
-    else if (credits >= 1) spin(1);
-
-  }
+function copyArray( array ) {
+    var copy = [];
+    for( var i = 0 ; i < array.length; i++) {
+	copy.push( array[i] );
+    }
+    return copy;
 }
 
-function spin(line_choice) {
-  
-  if (game_state != STATE_REST) return;
-  if (credits < line_choice) return;
 
-  credits -= line_choice;
-  playing_lines = line_choice;
+function SlotGame() {
 
-  cred_p.innerHTML = "Karma (" + credits + ")";
-  log_p.innerHTML = "";
+    var game = new Game();
 
-  game_state = STATE_SPINUP;
+    var items = [ 
+	{id: 'energy-64'},
+	{id: 'staff-64'},
+	{id: 'cash-64'},
+	{id: 'build-64'},
+	{id: 'goods-64'},
+	{id: 'gold-64'}
+    ];
 
+    $('canvas').attr('height', IMAGE_HEIGHT * ITEM_COUNT * 2);
+    $('canvas').css('height', IMAGE_HEIGHT * ITEM_COUNT * 2);
+
+    game.items = items;
+
+    // load assets and predraw the reel canvases
+    preloadImages( items, function() {
+
+	// images are preloaded
+
+	// draws canvas strip
+	function _fill_canvas( canvas, items ) {
+	    ctx = canvas.getContext('2d');
+	    ctx.fillStyle = '#ddd';
+
+	    for (var i = 0 ; i < ITEM_COUNT ; i++) {
+		var asset = items[i];
+		ctx.save();
+		ctx.shadowColor = "rgba(0,0,0,0.5)";
+		ctx.shadowOffsetX = 5;
+		ctx.shadowOffsetY = 5;
+		ctx.shadowBlur = 5;
+		ctx.drawImage(asset.img, 3, i * SLOT_HEIGHT + IMAGE_TOP_MARGIN);
+		ctx.drawImage(asset.img, 3, (i + ITEM_COUNT) * SLOT_HEIGHT + IMAGE_TOP_MARGIN);
+		ctx.restore();
+		ctx.fillRect(0, i * SLOT_HEIGHT, 70, SLOT_SEPARATOR_HEIGHT);
+		ctx.fillRect(0, (i + ITEM_COUNT)  * SLOT_HEIGHT, 70, SLOT_SEPARATOR_HEIGHT);
+	    }
+	}
+	// Draw the canvases with shuffled arrays
+	game.items1 = copyArray(items);
+	shuffleArray(game.items1);
+	_fill_canvas( game.c1[0], game.items1 );
+	game.items2 = copyArray(items);
+	shuffleArray(game.items2);
+	_fill_canvas( game.c2[0], game.items2 );
+	game.items3 = copyArray(items);
+	shuffleArray(game.items3);
+	_fill_canvas( game.c3[0], game.items3 );
+	game.resetOffset =  (ITEM_COUNT + 3) * SLOT_HEIGHT;
+	game.loop();
+    });
+
+    $('#play').click(function(e) {
+	// start game on play button click
+	$('h1').text('Rolling!');
+	game.restart();
+    });
+
+    // Show reels for debugging
+    var toggleReels = 1;
+    $('#debug').click(function() {
+	toggleReels = 1 - toggleReels;
+	if ( toggleReels ) {
+	    $('#reels').css('overflow', 'hidden' );
+	} else {
+	    $('#reels').css('overflow', 'visible' );
+	}
+    });
 }
 
-//---- Init Functions -----------------------------------------------
+function Game() {
 
-function init() {
-  can = document.getElementById("slots"); 
-  ctx = can.getContext("2d");
-  log_p = document.getElementById("log");
-  cred_p = document.getElementById("credits");
+    // reel canvases
+    this.c1 = $('#canvas1');
+    this.c2 = $('#canvas2');
+    this.c3 = $('#canvas3');
 
-  cred_p.innerHTML = "Karma (" + credits + ")"
+    // set random canvas offsets
+    this.offset1 = -parseInt(Math.random() * ITEM_COUNT ) * SLOT_HEIGHT;
+    this.offset2 = -parseInt(Math.random() * ITEM_COUNT ) * SLOT_HEIGHT;
+    this.offset3 = -parseInt(Math.random() * ITEM_COUNT ) * SLOT_HEIGHT;
+    this.speed1 = this.speed2 = this.speed3 = 0;
+    this.lastUpdate = new Date();
 
-  window.addEventListener('keydown', handleKey, true);
+    // Needed for CSS translates
+    this.vendor = 
+	(/webkit/i).test(navigator.appVersion) ? '-webkit' :
+    	(/firefox/i).test(navigator.userAgent) ? '-moz' :
+	(/msie/i).test(navigator.userAgent) ? 'ms' :
+    	'opera' in window ? '-o' : '';
+    
+    this.cssTransform = this.vendor + '-transform';
+    this.has3d = ('WebKitCSSMatrix' in window && 'm11' in new WebKitCSSMatrix())  
+    this.trnOpen       = 'translate' + (this.has3d ? '3d(' : '(');
+    this.trnClose      = this.has3d ? ',0)' : ')';
+    this.scaleOpen     = 'scale' + (this.has3d ? '3d(' : '(');
+    this.scaleClose    = this.has3d ? ',0)' : ')';
 
-  symbols.onload = function() {
-    symbols_loaded = true;
-    if (symbols_loaded && reels_bg_loaded) render_reel();
-  };
+    // draw the slots to initial locations
+    this.draw( true );
+}
 
-  reels_bg.onload = function() {
-    reels_bg_loaded = true;
-    if (symbols_loaded && reels_bg_loaded) render_reel();
-  };
+// Restar the game and determine the stopping locations for reels
+Game.prototype.restart = function() {
+    this.lastUpdate = new Date();
+    this.speed1 = this.speed2 = this.speed3 = SLOT_SPEED
 
+    // function locates id from items
+    function _find( items, id ) {
+	for ( var i=0; i < items.length; i++ ) {
+	    if ( items[i].id == id ) return i;
+	}
+    }
+
+    // uncomment to get always jackpot
+    //this.result1 = _find( this.items1, 'gold-64' );
+    //this.result2 = _find( this.items2, 'gold-64' );
+    //this.result3 = _find( this.items3, 'gold-64' );
+
+    // get random results
+    this.result1 = parseInt(Math.random() * this.items1.length)
+    this.result2 = parseInt(Math.random() * this.items2.length)
+    this.result3 = parseInt(Math.random() * this.items3.length)
+
+    // Clear stop locations
+    this.stopped1 = false;
+    this.stopped2 = false;
+    this.stopped3 = false;
+
+    // randomize reel locations
+    this.offset1 = -parseInt(Math.random( ITEM_COUNT )) * SLOT_HEIGHT;
+    this.offset2 = -parseInt(Math.random( ITEM_COUNT )) * SLOT_HEIGHT;
+    this.offset3 = -parseInt(Math.random( ITEM_COUNT )) * SLOT_HEIGHT;
+
+    $('#results').hide();
+
+    this.state = 1;
+}
+
+window.requestAnimFrame = (function(){
+    return window.requestAnimationFrame ||
+        window.webkitRequestAnimationFrame ||
+        window.mozRequestAnimationFrame ||
+        window.oRequestAnimationFrame ||
+        window.msRequestAnimationFrame ||
+        function(/* function */ callback, /* DOMElement */ element){
+            window.setTimeout(callback, 1000 / 60);
+        };
+})();
+
+Game.prototype.loop = function() {
+    var that = this;
+    that.running = true;
+    (function gameLoop() {
+	that.update();
+	that.draw();
+	if (that.running) {
+	    requestAnimFrame( gameLoop );
+	}
+    })();
+}
+
+Game.prototype.update = function() {
+
+    var now = new Date();
+    var that = this;
+
+    // Check slot status and if spun long enough stop it on result
+    function _check_slot( offset, result ) {
+	if ( now - that.lastUpdate > SPINTIME ) {
+	    var c = parseInt(Math.abs( offset / SLOT_HEIGHT)) % ITEM_COUNT;
+	    if ( c == result ) {
+		if ( result == 0 ) {
+		    if ( Math.abs(offset + (ITEM_COUNT * SLOT_HEIGHT)) < (SLOT_SPEED * 1.5)) {
+			return true; // done
+		    }
+		} else if ( Math.abs(offset + (result * SLOT_HEIGHT)) < (SLOT_SPEED * 1.5)) {
+		    return true; // done
+		}
+	    }
+	}
+	return false;
+    }
+
+    switch (this.state) {
+    case 1: // all slots spinning
+	if (now - this.lastUpdate > RUNTIME) {
+	    this.state = 2;
+	    this.lastUpdate = now;
+	}
+	break;
+    case 2: // slot 1
+	this.stopped1 = _check_slot( this.offset1, this.result1 );
+	if ( this.stopped1 ) {
+	    this.speed1 = 0;
+	    this.state++;
+	    this.lastUpdate = now;
+	}
+	break;
+    case 3: // slot 1 stopped, slot 2
+	this.stopped2 = _check_slot( this.offset2, this.result2 );
+	if ( this.stopped2 ) {
+	    this.speed2 = 0;
+	    this.state++;
+	    this.lastUpdate = now;
+	}
+	break;
+    case 4: // slot 2 stopped, slot 3
+	this.stopped3 = _check_slot( this.offset3, this.result3 );
+	if ( this.stopped3 ) {
+	    this.speed3 = 0;
+	    this.state++;
+	}
+	break;
+    case 5: // slots stopped 
+	if ( now - this.lastUpdate > 3000 ) {
+	    this.state = 6;
+	}
+	break;
+    case 6: // check results
+	var ec = 0;
+
+	$('#results').show();
+	if (that.items1[that.result1].id == 'gold-64') {
+	    ec++;
+	}
+	if (that.items2[that.result2].id == 'gold-64') {
+	    ec++;
+	}
+	if (that.items3[that.result3].id == 'gold-64') {
+	    ec++;
+	}
+	$('#multiplier').text(ec);
+
+	$('#status').text(BLURB_TBL[ec]);
+
+	this.state = 7;
+	break;
+    case 7: // game ends
+	break;
+    default:
+    }
+    this.lastupdate = now;
+}
+
+Game.prototype.draw = function( force ) {
+
+    if (this.state >= 6 ) return;
+
+    // draw the spinning slots based on current state
+    for (var i=1; i <= 3; i++ ) {
+	var resultp = 'result'+i;
+	var stopped = 'stopped'+i;
+	var speedp = 'speed'+i;
+	var offsetp = 'offset'+i;
+	var cp = 'c'+i;
+	if (this[stopped] || this[speedp] || force) {
+	    if (this[stopped]) {
+		this[speedp] = 0;
+		var c = this[resultp]; // get stop location
+		this[offsetp] = -(c * SLOT_HEIGHT);
+
+		if (this[offsetp] + DRAW_OFFSET > 0) {
+		    // reset back to beginning
+		    this[offsetp] = -this.resetOffset + SLOT_HEIGHT * 3;
+		}
+
+	    } else {
+		this[offsetp] += this[speedp];
+		if (this[offsetp] + DRAW_OFFSET > 0) {
+		    // reset back to beginning
+		    this[offsetp] = -this.resetOffset + SLOT_HEIGHT * 3 - DRAW_OFFSET;
+		}
+	    }
+	    // translate canvas location
+	    this[cp].css(this.cssTransform, this.trnOpen + '0px, '+(this[offsetp] + DRAW_OFFSET)+'px' + this.trnClose);
+	}
+    }
 }
