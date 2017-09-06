@@ -127,3 +127,64 @@ Ball.prototype.update = function(paddle1, paddle2) {
     }
   }
 };
+var keysDown = {};
+
+window.addEventListener("keydown", function(event) {
+  keysDown[event.keyCode] = true;
+});
+
+window.addEventListener("keyup", function(event) {
+  delete keysDown[event.keyCode];
+});
+var update = function() {
+  player.update();
+  ball.update(player.paddle, computer.paddle);
+};
+
+Player.prototype.update = function() {
+  for(var key in keysDown) {
+    var value = Number(key);
+    if(value == 37) { // left arrow
+      this.paddle.move(-4, 0);
+    } else if (value == 39) { // right arrow
+      this.paddle.move(4, 0);
+    } else {
+      this.paddle.move(0, 0);
+    }
+  }
+};
+
+Paddle.prototype.move = function(x, y) {
+  this.x += x;
+  this.y += y;
+  this.x_speed = x;
+  this.y_speed = y;
+  if(this.x < 0) { // all the way to the left
+    this.x = 0;
+    this.x_speed = 0;
+  } else if (this.x + this.width > 400) { // all the way to the right
+    this.x = 400 - this.width;
+    this.x_speed = 0;
+  }
+}
+var update = function() {
+  player.update();
+  computer.update(ball);
+  ball.update(player.paddle, computer.paddle);
+};
+
+Computer.prototype.update = function(ball) {
+  var x_pos = ball.x;
+  var diff = -((this.paddle.x + (this.paddle.width / 2)) - x_pos);
+  if(diff < 0 && diff < -4) { // max speed left
+    diff = -5;
+  } else if(diff > 0 && diff > 4) { // max speed right
+    diff = 5;
+  }
+  this.paddle.move(diff, 0);
+  if(this.paddle.x < 0) {
+    this.paddle.x = 0;
+  } else if (this.paddle.x + this.paddle.width > 400) {
+    this.paddle.x = 400 - this.paddle.width;
+  }
+};
